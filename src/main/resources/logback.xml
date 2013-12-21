@@ -1,0 +1,22 @@
+<configuration>
+
+    <!-- The underlying appender will be the standard console one. -->
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <!-- Wrap calls to the console logger with async dispatching to Disruptor. -->
+    <appender name="async" class="reactor.logback.AsyncAppender">
+        <appender-ref ref="stdout"/>
+    </appender>
+
+    <!-- Direct all logging through the AsyncAppender. -->
+    <root level="info">
+        <appender-ref ref="async"/>
+    </root>
+
+</configuration>

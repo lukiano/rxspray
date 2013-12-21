@@ -1,0 +1,1 @@
+Special thanks to [Jan Machacek's code](http://www.cakesolutions.net/teamblogs/2013/12/08/streaming-twitter-api-in-akka-and-spray/)
