@@ -9,14 +9,14 @@
         </encoder>
     </appender>
 
-    <!-- Wrap calls to the console logger with async dispatching to Disruptor. -->
+    <!-- Wrap calls to the console logger with async dispatching to Disruptor.
     <appender name="async" class="reactor.logback.AsyncAppender">
         <appender-ref ref="stdout"/>
-    </appender>
+    </appender>   -->
 
     <!-- Direct all logging through the AsyncAppender. -->
     <root level="info">
-        <appender-ref ref="async"/>
+        <appender-ref ref="stdout"/>
     </root>
 
 </configuration>

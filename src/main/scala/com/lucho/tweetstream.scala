@@ -7,11 +7,12 @@ import spray.client.pipelining._
 import akka.actor.{ActorRef, Actor}
 import spray.http.HttpRequest
 import scala.Some
-import domain.{Place, User, Tweet}
 import scala.io.Source
 import scala.util.Try
 import spray.can.Http
 import akka.io.IO
+import rx.lang.scala.Observer
+import com.lucho.ToObservableActor.UnSuscribe
 
 trait TwitterAuthorization {
   def authorize: HttpRequest => HttpRequest
@@ -20,7 +21,7 @@ trait TwitterAuthorization {
 trait OAuthTwitterAuthorization extends TwitterAuthorization {
   import OAuth._
   val home = System.getProperty("user.home")
-  val lines = Source.fromFile(s"$home/.twitter/activator").getLines().toList
+  val lines = Source.fromFile(s"$home/.twitter/rxspray").getLines().toList
 
   val consumer = Consumer(lines(0), lines(1))
   val token = Token(lines(2), lines(3))
@@ -28,7 +29,7 @@ trait OAuthTwitterAuthorization extends TwitterAuthorization {
   val authorize: (HttpRequest) => HttpRequest = oAuthAuthorizer(consumer, token)
 }
 
-trait TweetMarshaller {
+object TweetMarshaller {
 
   implicit object TweetUnmarshaller extends Unmarshaller[Tweet] {
 
@@ -72,7 +73,7 @@ object TweetStreamerActor {
   val twitterUri = Uri("https://stream.twitter.com/1.1/statuses/filter.json")
 }
 
-class TweetStreamerActor(uri: Uri, processor: ActorRef) extends Actor with TweetMarshaller {
+class TweetStreamerActor(uri: Uri, processor: ActorRef) extends Actor {
   this: TwitterAuthorization =>
   val io = IO(Http)(context.system)
 
@@ -80,9 +81,32 @@ class TweetStreamerActor(uri: Uri, processor: ActorRef) extends Actor with Tweet
     case query: String =>
       val body = HttpEntity(ContentType(MediaTypes.`application/x-www-form-urlencoded`), s"track=$query")
       val rq = HttpRequest(HttpMethods.POST, uri = uri, entity = body) ~> authorize
-      sendTo(io).withResponsesReceivedBy(self)(rq)
-    case ChunkedResponseStart(_) =>
-    case MessageChunk(entity, _) => TweetUnmarshaller(entity).fold(_ => (), processor !)
-    case _ =>
+      sendTo(io).withResponsesReceivedBy(processor)(rq)
   }
+}
+
+class ToObservableActor(observer: Observer[HttpEntity]) extends Actor {
+
+  val ignoreMessages: Receive = PartialFunction.empty
+
+  def receive: Receive = {
+    case UnSuscribe => context.become(ignoreMessages)
+    case ChunkedResponseStart(_) =>
+    case MessageChunk(entity, _) => observer.onNext(entity)
+    case ChunkedMessageEnd => observer.onCompleted()
+  }
+}
+ /*
+ TweetUnmarshaller(entity) match {
+      case Right(value) => observer.onNext(value)
+      //case Left(MalformedContent(message, Some(cause))) => observer.onError(new Exception(message, cause))
+      //case Left(MalformedContent(message, None)) => observer.onError(new Exception(message))
+      case _ =>
+    }
+  */
+
+object ToObservableActor {
+
+  case object UnSuscribe
+
 }
