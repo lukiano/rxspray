@@ -27,6 +27,8 @@ scalacOptions ++= Seq(
   "-encoding", "UTF-8"
 )
 
+seq(Revolver.settings: _*)
+
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % akkaVersion,
   "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,

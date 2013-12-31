@@ -4,7 +4,7 @@ import spray.httpx.unmarshalling.{MalformedContent, Unmarshaller, Deserialized}
 import spray.http._
 import spray.json._
 import spray.client.pipelining._
-import akka.actor.{ActorRef, Actor}
+import akka.actor.{ActorLogging, ActorRef, Actor}
 import spray.http.HttpRequest
 import scala.Some
 import scala.io.Source
@@ -13,6 +13,7 @@ import spray.can.Http
 import akka.io.IO
 import rx.lang.scala.Observer
 import com.lucho.ToObservableActor.UnSuscribe
+import akka.event.LoggingReceive
 
 trait TwitterAuthorization {
   def authorize: HttpRequest => HttpRequest
@@ -34,9 +35,9 @@ object TweetMarshaller {
   implicit object TweetUnmarshaller extends Unmarshaller[Tweet] {
 
     def mkUser(user: JsObject): Deserialized[User] = {
-      (user.fields("id_str"), user.fields("lang"), user.fields("followers_count")) match {
-        case (JsString(id), JsString(lang), JsNumber(followers)) => Right(User(id, lang, followers.toInt))
-        case (JsString(id), _, _)                                => Right(User(id, "", 0))
+      (user.fields("id_str"), user.fields("name"), user.fields("lang"), user.fields("followers_count")) match {
+        case (JsString(id), JsString(name), JsString(lang), JsNumber(followers)) => Right(User(id, name, lang, followers.toInt))
+        //case (JsString(id), _, _, _)                                => Right(User(id, "", "", 0))
         case _                                                   => Left(MalformedContent("bad user"))
       }
     }
@@ -73,15 +74,18 @@ object TweetStreamerActor {
   val twitterUri = Uri("https://stream.twitter.com/1.1/statuses/filter.json")
 }
 
-class TweetStreamerActor(uri: Uri, processor: ActorRef) extends Actor {
+class TweetStreamerActor(uri: Uri, processor: ActorRef) extends Actor with ActorLogging {
   this: TwitterAuthorization =>
   val io = IO(Http)(context.system)
 
-  def receive: Receive = {
+  def receive = LoggingReceive {
     case query: String =>
       val body = HttpEntity(ContentType(MediaTypes.`application/x-www-form-urlencoded`), s"track=$query")
       val rq = HttpRequest(HttpMethods.POST, uri = uri, entity = body) ~> authorize
-      sendTo(io).withResponsesReceivedBy(processor)(rq)
+      val pipeline = sendTo(io).withResponsesReceivedBy(processor)
+      log.info(s"Processor: $processor")
+      log.info(s"Pipeline: $pipeline")
+      pipeline(rq)
   }
 }
 
@@ -89,7 +93,7 @@ class ToObservableActor(observer: Observer[HttpEntity]) extends Actor {
 
   val ignoreMessages: Receive = PartialFunction.empty
 
-  def receive: Receive = {
+  def receive = LoggingReceive {
     case UnSuscribe => context.become(ignoreMessages)
     case ChunkedResponseStart(_) =>
     case MessageChunk(entity, _) => observer.onNext(entity)

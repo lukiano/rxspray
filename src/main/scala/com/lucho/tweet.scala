@@ -1,6 +1,6 @@
 package com.lucho
 
-case class User(id: String, lang: String, followersCount: Int)
+case class User(id: String, name: String, lang: String, followersCount: Int)
 
 case class Place(country: String, name: String) {
   override lazy val toString = s"$name, $country"
